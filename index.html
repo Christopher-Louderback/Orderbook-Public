@@ -1,0 +1,145 @@
+<!DOCTYPE html> //CONSTS IN FORMULAS FOR CLEANER CODE
+<html>
+<head>
+    <title>Order Book Heatmap</title>
+</head>
+<body>
+    <body style="background: #0d0d0d;">
+    <p style="color: white;">Best Bid: <span id="best-bid">--</span></p>
+    <p style="color: white;">Midprice: <span id="mid">--</span></p>
+    <p style="color: white;">Best Ask: <span id="best-ask">--</span></p>
+    <canvas id="heatmap" width="1400" height="700"></canvas>
+
+    <script>
+        const ws = new WebSocket("ws://localhost:8765");
+        const canvas = document.getElementById("heatmap");
+        const ctx = canvas.getContext("2d");
+
+        const MAX_SNAPSHOTS = 200;
+        const snapshots = [];
+
+        ws.onopen = () => console.log("connected");
+        ws.onerror = (e) => console.log("error", e);
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            document.getElementById("best-bid").textContent = data.best_bid.toFixed(2);
+            document.getElementById("mid").textContent = data.mid.toFixed(2);
+            document.getElementById("best-ask").textContent = data.best_ask.toFixed(2);
+
+            snapshots.push(data);
+            if (snapshots.length > MAX_SNAPSHOTS) snapshots.shift();
+
+            draw();
+        };
+
+        function quantityToColor(qty, maxQty) {
+            const t = Math.min(qty / maxQty, 1);
+            // purple -> blue -> yellow low to high liquid
+            if (t < 0.25) {
+                const s = t / 0.25;
+                return `rgb(${Math.round(68 - 68 * s)}, ${Math.round(1 + 84 * s)}, ${Math.round(84 + 86 * s)})`;
+            } else if (t < 0.5) {
+                const s = (t - 0.25) / 0.25;
+                return `rgb(${Math.round(s * 33)}, ${Math.round(85 + 83 * s)}, ${Math.round(170 - 30 * s)})`;
+            } else if (t < 0.75) {
+                const s = (t - 0.5) / 0.25;
+                return `rgb(${Math.round(33 + 161 * s)}, ${Math.round(168 + 23 * s)}, ${Math.round(140 - 100 * s)})`;
+            } else {
+                const s = (t - 0.75) / 0.25;
+                return `rgb(${Math.round(194 + 59 * s)}, ${Math.round(191 + 32 * s)}, ${Math.round(40 - 25 * s)})`;
+            }
+        }
+
+        function draw() {
+            if (snapshots.length < 2) return;
+
+            const W = canvas.width;
+            const H = canvas.height;
+            const pad = 70;
+
+            // price range across all snapshots
+            let minPrice = Infinity, maxPrice = -Infinity;
+            let maxQty = 0;
+
+            for (const snap of snapshots) {
+                for (const p of Object.keys(snap.bids)) {
+                    minPrice = Math.min(minPrice, parseFloat(p));
+                    maxPrice = Math.max(maxPrice, parseFloat(p));
+                    maxQty = Math.max(maxQty, snap.bids[p]);
+                }
+                for (const p of Object.keys(snap.asks)) {
+                    minPrice = Math.min(minPrice, parseFloat(p));
+                    maxPrice = Math.max(maxPrice, parseFloat(p));
+                    maxQty = Math.max(maxQty, snap.asks[p]);
+                }
+            }
+
+            ctx.fillStyle = "#0d0d0d";
+            ctx.fillRect(0, 0, W, H);
+
+            const colW = (W - pad) / MAX_SNAPSHOTS;
+            const priceRange = maxPrice - minPrice;
+
+            for (let i = 0; i < snapshots.length; i++) {
+                const snap = snapshots[i];
+                const x = pad + i * colW;
+
+                const allLevels = {
+                    ...snap.bids,
+                    ...snap.asks
+                };
+
+                for (const [price, qty] of Object.entries(allLevels)) {
+                    const p = parseFloat(price);
+                    const y = H - pad - ((p - minPrice) / priceRange) * (H - pad * 2);
+                    const rowH = Math.max(1, (H - pad * 2) / (priceRange / 0.01));
+
+                    ctx.fillStyle = quantityToColor(qty, maxQty);
+                    ctx.fillRect(x, y - rowH, colW, rowH);
+                }
+            }
+
+            //price y
+            ctx.fillStyle = "white";
+            ctx.font = "11px monospace";
+            ctx.textAlign = "right";
+            const steps = 8;
+            for (let i = 0; i <= steps; i++) {
+                const p = minPrice + (priceRange * i / steps);
+                const y = H - pad - (i / steps) * (H - pad * 2);
+                ctx.fillText(p.toFixed(2), pad - 5, y + 4);
+            }
+
+            // time x
+            ctx.fillStyle = "white";
+            ctx.font = "11px monospace";
+            ctx.textAlign = "center";
+            const timeSteps = 5;
+            for (let i = 0; i <= timeSteps; i++) {
+                const idx = Math.round(i / timeSteps * (snapshots.length - 1));
+                const x = pad + idx * colW;
+                const label = snapshots[idx] ? new Date(snapshots[idx].timestamp).toLocaleTimeString("en-GB") : "";
+                ctx.fillText(label, x, H - 5);
+            }
+
+            // mid price line
+            ctx.beginPath();
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            for (let i = 0; i < snapshots.length; i++) {
+                const snap = snapshots[i];
+                if (!snap.mid) continue;
+                const x = pad + i * colW;
+                const y = H - pad - ((snap.mid - minPrice) / priceRange) * (H - pad * 2);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    </script>
+</body>
+</html>
