@@ -9,7 +9,7 @@ To run, cd into your Orderbook folder and then run 'python -m http.server 3000'.
 http://localhost:3000/index.html
 
 To do:
-Another pass over frontend to improve look and update label
-Fully implement logging
-Enforce types (overlooked before - was rusty in Python)
-Update syntax with _ for private methods (see above)
+##### Another pass over frontend to improve look and update label
+##### Fully implement logging
+##### Enforce types (overlooked before - was rusty in Python)
+##### Update syntax with _ for private methods (see above)
