@@ -13,3 +13,5 @@ To do:
 ##### Fully implement logging
 ##### Enforce types (overlooked before - was rusty in Python)
 ##### Update syntax with _ for private methods (see above)
+
+![Screenshot](https://i.imgur.com/Vjx571G.jpeg)
